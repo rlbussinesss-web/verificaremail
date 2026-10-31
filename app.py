@@ -239,65 +239,41 @@ coluna_nome = leitura.coluna_nome or "Nome Completo"
 coluna_cargo = leitura.coluna_cargo
 coluna_matricula = leitura.coluna_matricula
 
-if st.button("GERAR EMAILS (65.483 SERVIDORES)", type="primary", width="stretch"):
-    st.session_state.pop("resultado", None)
-    with st.spinner("Processando..."):
-        res, removidos, segundos = _processar_com_progresso(
-            leitura.df, coluna_nome, coluna_cargo, coluna_matricula, cfg
-        )
-    st.session_state.resultado = res
-    st.session_state.removidos = removidos
-    st.session_state.n_arquivo = len(leitura.df)
-    st.session_state.segundos = segundos
+# Carrega e processa automaticamente com cache em memória (sem precisar clicar no botão)
+@st.cache_data(show_spinner=False)
+def _obter_resultado_padrao():
+    df_raw = pd.read_csv(caminho_oficial, sep=";", dtype=str, keep_default_na=False)
+    res_df, _ = processar(df_raw, "Nome Completo", config=cfg, coluna_cargo="Cargo", coluna_matricula="Matrícula")
+    
+    # Ordenação idêntica ao site da Transparência (Matrícula)
+    if "Matrículas" in res_df.columns:
+        def _norm_mat(m):
+            if not isinstance(m, str) or not m.strip():
+                return "999999999"
+            p = m.split(",")[0].strip()
+            return re.sub(r"/0*(\d+)", r"/\1", p)
+        chaves = res_df["Matrículas"].apply(_norm_mat)
+        res_df = res_df.iloc[chaves.argsort()].reset_index(drop=True)
 
-if "resultado" not in st.session_state:
-    st.stop()
+    # Marca repetições da 2ª em diante
+    res_df["Eh_Repeticao_Posterior"] = res_df.duplicated(subset=["Email Gerado"], keep="first") & (res_df["Email Gerado"] != "")
+    return res_df
 
-res: pd.DataFrame = st.session_state.resultado
-removidos: pd.DataFrame = st.session_state.get("removidos", res.iloc[0:0])
-stats = resumir(res, st.session_state.get("n_arquivo"), removidos)
+res = _obter_resultado_padrao()
 
-st.subheader("3. Resultado")
-m1, m2, m3, m4, m5 = st.columns(5)
-m1.metric("Registros processados", f"{stats['registros_processados']:,}".replace(",", "."))
-m2.metric("Nomes validos", f"{stats['validos']:,}".replace(",", "."))
-m3.metric("Duplicados", f"{stats['duplicados']:,}".replace(",", "."))
-m4.metric("Precisam de revisao", f"{stats['revisar']:,}".replace(",", "."))
-if cfg.descartar_conflitos:
-    m5.metric("Descartados p/ conflito", f"{stats['descartados_conflito']:,}".replace(",", "."))
-else:
-    m5.metric("Conflitos", f"{stats['conflitos']:,}".replace(",", "."))
-
-st.caption(
-    f"Nomes unicos: **{stats['nomes_unicos']:,}** · "
-    f"E-mails gerados: **{stats['emails_gerados']:,}** · "
-    f"E-mails unicos: **{stats['emails_unicos']:,}** · "
-    f"Sem nome/invalidos: **{stats['invalidos']:,}** · "
-    f"Tempo: **{st.session_state.get('segundos', 0):.2f}s**".replace(",", ".")
-)
-
-f1, f2 = st.columns([1, 1])
-busca_nome = f1.text_input("Buscar por nome")
-busca_email = f2.text_input("Buscar por e-mail")
-
-col_revisao = "Revisão" if "Revisão" in res.columns else "Revisao"
-
-# Ordenação idêntica ao site do Portal da Transparência (texto da Matrícula sem zeros extras)
-if "Matrículas" in res.columns:
-    def _norm_mat(m):
-        if not isinstance(m, str) or not m.strip():
-            return "999999999"
-        p = m.split(",")[0].strip()
-        return re.sub(r"/0*(\d+)", r"/\1", p)
-
-    chaves = res["Matrículas"].apply(_norm_mat)
-    res = res.iloc[chaves.argsort()].reset_index(drop=True)
+# Barra de busca e filtro rápido de repetições
+b1, b2, b3 = st.columns([1.5, 1.5, 1])
+busca_nome = b1.text_input("Buscar por nome", placeholder="Digite o nome...")
+busca_email = b2.text_input("Buscar por e-mail", placeholder="Digite o e-mail...")
+ocultar_repetidos = b3.checkbox("Ocultar repetidos", value=False, help="Mostra apenas os primeiros e-mails únicos e válidos.")
 
 filtrado = res
 if busca_nome:
     filtrado = filtrado[filtrado["Nome Original"].str.contains(busca_nome, case=False, na=False)]
 if busca_email:
     filtrado = filtrado[filtrado["Email Gerado"].str.contains(busca_email, case=False, na=False)]
+if ocultar_repetidos:
+    filtrado = filtrado[~filtrado["Eh_Repeticao_Posterior"]]
 
 p1, p2 = st.columns([1, 2.5])
 tam_pagina = p1.selectbox("Linhas por bloco", [50, 100, 200, 500, 1000], index=0)
