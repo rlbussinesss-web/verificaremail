@@ -276,20 +276,9 @@ st.caption(
     f"Tempo: **{st.session_state.get('segundos', 0):.2f}s**".replace(",", ".")
 )
 
-st.subheader("4. Tabela")
-f1, f2, f3 = st.columns([2, 2, 2])
+f1, f2 = st.columns([1, 1])
 busca_nome = f1.text_input("Buscar por nome")
 busca_email = f2.text_input("Buscar por e-mail")
-status_sel = f3.multiselect(
-    "Filtrar por status", options=sorted(res["Status"].unique()), default=[]
-)
-
-g1, g2, g3 = st.columns(3)
-so_conflitos = g1.checkbox("Mostrar somente conflitos")
-so_revisar = g2.checkbox("Mostrar somente registros que precisam de revisao")
-so_confirmados = g3.checkbox(
-    "Mostrar somente CONFIRMADOS", disabled=True, help="Nao disponivel nesta versao simplificada.",
-)
 
 col_revisao = "Revisão" if "Revisão" in res.columns else "Revisao"
 
@@ -298,7 +287,6 @@ if "Matrículas" in res.columns:
     def _norm_mat(m):
         if not isinstance(m, str) or not m.strip():
             return "999999999"
-        # Pega a primeira matrícula (ex: '1000128/04' -> '1000128/4' ou '1000349/01' -> '1000349/1')
         p = m.split(",")[0].strip()
         return re.sub(r"/0*(\d+)", r"/\1", p)
 
@@ -310,12 +298,6 @@ if busca_nome:
     filtrado = filtrado[filtrado["Nome Original"].str.contains(busca_nome, case=False, na=False)]
 if busca_email:
     filtrado = filtrado[filtrado["Email Gerado"].str.contains(busca_email, case=False, na=False)]
-if status_sel:
-    filtrado = filtrado[filtrado["Status"].isin(status_sel)]
-if so_conflitos:
-    filtrado = filtrado[filtrado["Status"] == "CONFLITO"]
-if so_revisar:
-    filtrado = filtrado[filtrado[col_revisao] == "REVISAR"]
 
 p1, p2 = st.columns([1, 2.5])
 tam_pagina = p1.selectbox("Linhas por bloco", [50, 100, 200, 500, 1000], index=0)
