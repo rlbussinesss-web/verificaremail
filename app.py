@@ -224,14 +224,24 @@ st.caption(
 
 origem = st.radio(
     "De onde vem os nomes?",
-    ["API da Transparencia de PE (online)", "Arquivo CSV"],
+    ["Base Oficial do Portal (CSV - 65.483 servidores)", "API da Transparência (Online)", "Fazer Upload de outro CSV"],
+    index=0,
     horizontal=True,
 )
 
 dados_bytes: bytes | None = None
 origem_nome = ""
 
-if origem.startswith("API"):
+if origem.startswith("Base Oficial"):
+    caminho_oficial = RAIZ / "data" / "cadastro_servidores_pe_65483.csv"
+    if caminho_oficial.exists():
+        dados_bytes = caminho_oficial.read_bytes()
+        origem_nome = "cadastro_servidores_pe_65483.csv"
+    else:
+        st.error("Arquivo oficial não encontrado na pasta data.")
+        st.stop()
+
+elif origem.startswith("API"):
     st.caption(
         "Consulta direta da base de dados do Portal da Transparência de Pernambuco "
         "(dados.pe.gov.br e transparencia.pe.gov.br)."
@@ -262,7 +272,6 @@ if origem.startswith("API"):
     if btn_buscar:
         with st.spinner("Consultando dados oficiais no Painel de Cadastro dos Servidores..."):
             try:
-                # Mapeia mês para número se selecionado
                 mes_num = "0"
                 if filtro_mes != "Todos":
                     mes_num = filtro_mes.split(" - ")[0].lstrip("0")
@@ -290,36 +299,16 @@ if origem.startswith("API"):
     if st.session_state.get("api_bytes"):
         dados_bytes = st.session_state["api_bytes"]
         origem_nome = st.session_state.get("api_nome", "cadastro_servidores_pe.csv")
-        st.success(
-            f"Servidores carregados com sucesso ({len(dados_bytes):,} bytes). "
-            "Confira os dados abaixo e clique em GERAR EMAILS.".replace(",", ".")
-        )
     else:
         st.info("Preencha os filtros desejados e clique em **Pesquisar**.")
         st.stop()
 
 else:
     enviado = st.file_uploader("Arraste seu CSV aqui", type=["csv"])
-    csv_local = sorted(RAIZ.glob("*.csv")) + sorted((RAIZ / "data").glob("*.csv"))
-    usar_local = None
-    if not enviado and csv_local:
-        st.info(
-            "Nenhum arquivo enviado. Voce pode usar um CSV que ja esta na pasta do projeto:"
-        )
-        usar_local = st.selectbox(
-            "CSV encontrado na pasta",
-            options=[str(p.relative_to(RAIZ)) for p in csv_local],
-        )
-
     if enviado is not None:
         dados_bytes = enviado.getvalue()
         origem_nome = enviado.name
-    elif usar_local:
-        caminho = RAIZ / usar_local
-        dados_bytes = caminho.read_bytes()
-        origem_nome = caminho.name
-
-    if not dados_bytes:
+    else:
         st.stop()
 
 try:
