@@ -222,106 +222,24 @@ st.caption(
     "ultimo sobrenome @ dominio. Particulas (da, de, do, das, dos, e) nao geram inicial."
 )
 
-origem = st.radio(
-    "De onde vem os nomes?",
-    ["Base Oficial do Portal (CSV - 65.483 servidores)", "API da Transparência (Online)", "Fazer Upload de outro CSV"],
-    index=0,
-    horizontal=True,
-)
+caminho_oficial = RAIZ / "data" / "cadastro_servidores_pe_65483.csv"
+if not caminho_oficial.exists():
+    st.error("Arquivo da base oficial não encontrado em data/cadastro_servidores_pe_65483.csv.")
+    st.stop()
 
-dados_bytes: bytes | None = None
-origem_nome = ""
-
-if origem.startswith("Base Oficial"):
-    caminho_oficial = RAIZ / "data" / "cadastro_servidores_pe_65483.csv"
-    if caminho_oficial.exists():
-        dados_bytes = caminho_oficial.read_bytes()
-        origem_nome = "cadastro_servidores_pe_65483.csv"
-    else:
-        st.error("Arquivo oficial não encontrado na pasta data.")
-        st.stop()
-
-elif origem.startswith("API"):
-    st.caption(
-        "Consulta direta da base de dados do Portal da Transparência de Pernambuco "
-        "(dados.pe.gov.br e transparencia.pe.gov.br)."
-    )
-
-    with st.container(border=True):
-        st.subheader("Filtros")
-
-        c_ano, c_mes = st.columns(2)
-        ano_opcoes = ["Todos"] + [str(a) for a in range(2026, 2009, -1)]
-        filtro_ano = c_ano.selectbox("Ano de Admissão: 🛈", ano_opcoes, index=0)
-
-        meses_nomes = [
-            "Todos", "01 - Janeiro", "02 - Fevereiro", "03 - Março", "04 - Abril",
-            "05 - Maio", "06 - Junho", "07 - Julho", "08 - Agosto",
-            "09 - Setembro", "10 - Outubro", "11 - Novembro", "12 - Dezembro"
-        ]
-        filtro_mes = c_mes.selectbox("Mês de Admissão: 🛈", meses_nomes, index=0)
-
-        filtro_lotacao = st.text_input("Lotação: 🛈", value="SECRETARIA DE EDUCACAO")
-
-        c_mat, c_srv = st.columns(2)
-        filtro_mat = c_mat.text_input("Matrícula: 🛈", value="")
-        filtro_srv = c_srv.text_input("Nome do Servidor: 🛈", value="")
-
-        btn_buscar = st.button("Pesquisar", type="primary")
-
-    if btn_buscar:
-        with st.spinner("Consultando dados oficiais no Painel de Cadastro dos Servidores..."):
-            try:
-                mes_num = "0"
-                if filtro_mes != "Todos":
-                    mes_num = filtro_mes.split(" - ")[0].lstrip("0")
-
-                ano_val = filtro_ano if filtro_ano != "Todos" else "0"
-
-                df_api = consultar_painel_cadastro(
-                    lotacao=filtro_lotacao.strip(),
-                    ano=ano_val,
-                    mes=mes_num,
-                    matricula=filtro_mat.strip(),
-                    nome_servidor=filtro_srv.strip(),
-                )
-
-                if df_api.empty:
-                    st.warning("Nenhum servidor encontrado com os filtros informados.")
-                    st.session_state.pop("api_bytes", None)
-                else:
-                    st.session_state["api_bytes"] = para_csv_bytes(df_api)
-                    st.session_state["api_nome"] = "cadastro_servidores_pe.csv"
-            except Exception as e:
-                st.error(f"Falha ao pesquisar na Transparência: {e}")
-                st.session_state.pop("api_bytes", None)
-
-    if st.session_state.get("api_bytes"):
-        dados_bytes = st.session_state["api_bytes"]
-        origem_nome = st.session_state.get("api_nome", "cadastro_servidores_pe.csv")
-    else:
-        st.info("Preencha os filtros desejados e clique em **Pesquisar**.")
-        st.stop()
-
-else:
-    enviado = st.file_uploader("Arraste seu CSV aqui", type=["csv"])
-    if enviado is not None:
-        dados_bytes = enviado.getvalue()
-        origem_nome = enviado.name
-    else:
-        st.stop()
+dados_bytes = caminho_oficial.read_bytes()
 
 try:
     leitura = _ler(dados_bytes, None)
 except Exception as e:
-    st.error(f"Nao foi possivel ler o CSV: {e}")
+    st.error(f"Não foi possível carregar a base oficial: {e}")
     st.stop()
 
 coluna_nome = leitura.coluna_nome or "Nome Completo"
 coluna_cargo = leitura.coluna_cargo
 coluna_matricula = leitura.coluna_matricula
 
-if st.button("GERAR EMAILS", type="primary", width="stretch"):
+if st.button("GERAR EMAILS (65.483 SERVIDORES)", type="primary", width="stretch"):
     st.session_state.pop("resultado", None)
     with st.spinner("Processando..."):
         res, removidos, segundos = _processar_com_progresso(
