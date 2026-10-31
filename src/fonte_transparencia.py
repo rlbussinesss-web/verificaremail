@@ -289,9 +289,7 @@ def consultar_painel_cadastro(
         for col in df.columns:
             df[col] = df[col].astype(str).str.strip().replace("None", "").replace("nan", "")
 
-        _p(1.0, f"{len(df):,} servidores carregados com sucesso!".replace(",", "."))
         return df
 
     finally:
-        if fechar:
-            sessao.close()
+        sessao.close()
