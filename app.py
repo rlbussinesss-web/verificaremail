@@ -415,6 +415,16 @@ with tab_salvos:
     st.subheader("Gerenciador de Estoque & Vendas")
     st.caption("Controle os e-mails disponíveis para entrega e os que já foram vendidos.")
 
+    def _extrair_valor_float(texto_preco: str) -> float:
+        if not texto_preco:
+            return 0.0
+        # Remove "R$", espaços, e troca virgula por ponto
+        limpo = re.sub(r"[^\d,\.]", "", str(texto_preco)).replace(".", "").replace(",", ".")
+        try:
+            return float(limpo)
+        except Exception:
+            return 0.0
+
     # Migra formato antigo se necessário
     for item in st.session_state.emails_salvos:
         if "status" not in item:
@@ -423,15 +433,53 @@ with tab_salvos:
             item["preco"] = "R$ 0,00"
         if "comprador" not in item:
             item["comprador"] = ""
+        if "data_venda" not in item and item.get("status") == "Vendido":
+            item["data_venda"] = item.get("data", "")
 
     total_estoque = len(st.session_state.emails_salvos)
     total_disponiveis = sum(1 for x in st.session_state.emails_salvos if x.get("status") == "Disponível")
     total_vendidos = sum(1 for x in st.session_state.emails_salvos if x.get("status") == "Vendido")
 
-    m_v1, m_v2, m_v3 = st.columns(3)
-    m_v1.metric("Estoque Total", total_estoque)
-    m_v2.metric("Disponíveis para Venda", total_disponiveis)
-    m_v3.metric("Vendidos", total_vendidos)
+    # Cálculos Financeiros
+    faturamento_total = sum(_extrair_valor_float(x.get("preco", "0")) for x in st.session_state.emails_salvos if x.get("status") == "Vendido")
+    potencial_estoque = sum(_extrair_valor_float(x.get("preco", "0")) for x in st.session_state.emails_salvos if x.get("status") == "Disponível")
+    ticket_medio = (faturamento_total / total_vendidos) if total_vendidos > 0 else 0.0
+
+    # Linha 1: Painel Financeiro e Métricas
+    m_f1, m_f2, m_f3, m_f4 = st.columns(4)
+    m_f1.metric("💰 Faturamento Total", f"R$ {faturamento_total:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
+    m_f2.metric("📦 Potencial em Estoque", f"R$ {potencial_estoque:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
+    m_f3.metric("🎯 Vendas Realizadas", f"{total_vendidos} e-mails")
+    m_f4.metric("📈 Ticket Médio", f"R$ {ticket_medio:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
+
+    # Gráfico de Vendas & Faturamento se houver vendas
+    if total_vendidos > 0 or total_estoque > 0:
+        with st.expander("📊 Gráficos de Desempenho Financeiro & Vendas", expanded=True):
+            g_col1, g_col2 = st.columns([1.5, 1])
+            
+            with g_col1:
+                st.caption("Faturamento Acumulado por E-mails Vendidos (R$)")
+                vendidos_lista = [x for x in st.session_state.emails_salvos if x.get("status") == "Vendido"]
+                if vendidos_lista:
+                    dados_grafico = []
+                    acumulado = 0.0
+                    for i, v in enumerate(reversed(vendidos_lista), 1):
+                        val = _extrair_valor_float(v.get("preco", "0"))
+                        acumulado += val
+                        label_item = v.get("data_venda") or f"Venda #{i}"
+                        dados_grafico.append({"Venda": f"#{i}", "Faturamento (R$)": acumulado, "Valor": val})
+                    df_chart = pd.DataFrame(dados_grafico)
+                    st.line_chart(df_chart.set_index("Venda")[["Faturamento (R$)"]], color="#00ff88")
+                else:
+                    st.info("Nenhuma venda realizada ainda para gerar a curva de faturamento.")
+
+            with g_col2:
+                st.caption("Distribuição do Estoque (Disponíveis vs Vendidos)")
+                df_dist = pd.DataFrame({
+                    "Status": ["Disponíveis", "Vendidos"],
+                    "Quantidade": [total_disponiveis, total_vendidos]
+                })
+                st.bar_chart(df_dist.set_index("Status"), color="#ededed")
 
     with st.container(border=True):
         st.markdown("**Cadastrar novo e-mail no estoque**")
@@ -575,7 +623,13 @@ with tab_salvos:
             # Botão de alternar status com 1 clique na mesma linha
             label_btn = "Marcar Vendido" if eh_disp else "Reativar"
             if col_e4.button(label_btn, key=f"btn_toggle_{item['email']}_{idx}", use_container_width=True):
-                item["status"] = "Vendido" if eh_disp else "Disponível"
+                from datetime import datetime
+                if eh_disp:
+                    item["status"] = "Vendido"
+                    item["data_venda"] = datetime.now().strftime("%d/%m/%Y %H:%M")
+                else:
+                    item["status"] = "Disponível"
+                    item.pop("data_venda", None)
                 _gravar_emails_salvos(st.session_state.emails_salvos)
                 st.rerun()
 
