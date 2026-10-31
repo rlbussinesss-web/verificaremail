@@ -412,15 +412,35 @@ with tab_geral:
     _renderizar_tabela_clicavel(pagina_df)
 
 with tab_salvos:
-    st.subheader("Armazenamento de E-mails")
-    st.caption("Guarde aqui os e-mails que você separou para utilizar sempre que quiser.")
+    st.subheader("Gerenciador de Estoque & Vendas")
+    st.caption("Controle os e-mails disponíveis para entrega e os que já foram vendidos.")
+
+    # Migra formato antigo se necessário
+    for item in st.session_state.emails_salvos:
+        if "status" not in item:
+            item["status"] = "Disponível"
+        if "preco" not in item:
+            item["preco"] = "R$ 0,00"
+        if "comprador" not in item:
+            item["comprador"] = ""
+
+    total_estoque = len(st.session_state.emails_salvos)
+    total_disponiveis = sum(1 for x in st.session_state.emails_salvos if x.get("status") == "Disponível")
+    total_vendidos = sum(1 for x in st.session_state.emails_salvos if x.get("status") == "Vendido")
+
+    m_v1, m_v2, m_v3 = st.columns(3)
+    m_v1.metric("Estoque Total", total_estoque)
+    m_v2.metric("Disponíveis para Venda", total_disponiveis)
+    m_v3.metric("Vendidos", total_vendidos)
 
     with st.container(border=True):
-        col_in1, col_in2, col_in3 = st.columns([2, 1.5, 1])
-        novo_email = col_in1.text_input("E-mail a salvar", placeholder="exemplo.sobrenome@professor.educacao.pe.gov.br")
-        nova_nota = col_in2.text_input("Nota / Descrição (opcional)", placeholder="Ex: Testado OK, Contato...")
+        st.markdown("**Cadastrar novo e-mail no estoque**")
+        col_in1, col_in2, col_in3, col_in4 = st.columns([2, 1.2, 1.2, 1])
+        novo_email = col_in1.text_input("E-mail", placeholder="exemplo.sobrenome@professor.educacao.pe.gov.br")
+        novo_preco = col_in2.text_input("Preço", value="R$ 10,00")
+        nova_nota = col_in3.text_input("Nota / Observação", placeholder="Ex: Conta ativada...")
         
-        if col_in3.button("Salvar E-mail", type="primary", use_container_width=True):
+        if col_in4.button("Adicionar", type="primary", use_container_width=True):
             if novo_email.strip():
                 email_limpo = novo_email.strip().lower()
                 existe = any(x["email"] == email_limpo for x in st.session_state.emails_salvos)
@@ -429,21 +449,25 @@ with tab_salvos:
                     agora = datetime.now().strftime("%d/%m/%Y %H:%M")
                     st.session_state.emails_salvos.insert(0, {
                         "email": email_limpo,
+                        "status": "Disponível",
+                        "preco": novo_preco.strip(),
                         "nota": nova_nota.strip(),
+                        "comprador": "",
                         "data": agora
                     })
                     _gravar_emails_salvos(st.session_state.emails_salvos)
-                    st.success(f"E-mail {email_limpo} salvo!")
+                    st.success(f"E-mail {email_limpo} adicionado ao estoque!")
                     st.rerun()
                 else:
-                    st.warning("Este e-mail já está na sua lista.")
+                    st.warning("Este e-mail já está no estoque.")
             else:
                 st.error("Digite um e-mail válido.")
 
-    # Opção de colagem em lote
-    with st.expander("Colar múltiplos e-mails de uma vez"):
-        lote_txt = st.text_area("Cole aqui vários e-mails (um por linha):", height=100)
-        if st.button("Salvar todos em lote"):
+    with st.expander("Importar múltiplos e-mails em lote para o estoque"):
+        lote_txt = st.text_area("Cole os e-mails (um por linha):", height=100)
+        c_lote1, c_lote2 = st.columns([1, 1])
+        preco_lote = c_lote1.text_input("Preço padrão para este lote", value="R$ 10,00")
+        if c_lote2.button("Cadastrar lote no estoque"):
             linhas_lote = [l.strip().lower() for l in lote_txt.splitlines() if "@" in l]
             adicionados = 0
             from datetime import datetime
@@ -453,33 +477,75 @@ with tab_salvos:
                 if em not in emails_existentes:
                     st.session_state.emails_salvos.insert(0, {
                         "email": em,
+                        "status": "Disponível",
+                        "preco": preco_lote.strip(),
                         "nota": "Lote",
+                        "comprador": "",
                         "data": agora
                     })
                     emails_existentes.add(em)
                     adicionados += 1
             if adicionados > 0:
                 _gravar_emails_salvos(st.session_state.emails_salvos)
-                st.success(f"{adicionados} novos e-mails salvos!")
+                st.success(f"{adicionados} novos e-mails adicionados como Disponíveis!")
                 st.rerun()
 
     if st.session_state.emails_salvos:
-        st.write(f"Total salvos: **{len(st.session_state.emails_salvos)}**")
-        df_salvos = pd.DataFrame(st.session_state.emails_salvos)
-        df_salvos.columns = ["E-mail", "Nota", "Data Salvo"]
-        st.dataframe(df_salvos, use_container_width=True)
-        
+        f_st1, f_st2 = st.columns([1.5, 2])
+        filtro_status_venda = f_st1.selectbox("Filtrar por Status", ["Todos", "Apenas Disponíveis", "Apenas Vendidos"])
+        busca_estoque = f_st2.text_input("Filtrar estoque por texto", placeholder="Buscar e-mail ou nota...")
+
+        itens_filtrados = st.session_state.emails_salvos
+        if filtro_status_venda == "Apenas Disponíveis":
+            itens_filtrados = [x for x in itens_filtrados if x.get("status") == "Disponível"]
+        elif filtro_status_venda == "Apenas Vendidos":
+            itens_filtrados = [x for x in itens_filtrados if x.get("status") == "Vendido"]
+
+        if busca_estoque:
+            b_low = busca_estoque.strip().lower()
+            itens_filtrados = [x for x in itens_filtrados if b_low in x.get("email", "") or b_low in x.get("nota", "").lower()]
+
+        st.write(f"Exibindo **{len(itens_filtrados)}** de **{total_estoque}** e-mails")
+
+        # Tabela interativa com alteração rápida de status
+        for idx, item in enumerate(itens_filtrados):
+            col_e1, col_e2, col_e3, col_e4, col_e5 = st.columns([3, 1, 1.2, 1.3, 0.8])
+            
+            eh_disp = item.get("status") == "Disponível"
+            icone_status = "🟢 DISPONÍVEL" if eh_disp else "🔴 VENDIDO"
+            cor_email = "#ffffff" if eh_disp else "#666666; text-decoration: line-through;"
+            
+            col_e1.markdown(f"<span style='font-family: Geist Mono, monospace; font-size: 13.5px; color: {cor_email};'>{item['email']}</span>", unsafe_allow_html=True)
+            col_e2.markdown(f"**{item.get('preco', 'R$ 0,00')}**")
+            col_e3.markdown(f"<span style='font-size: 12px; font-weight: bold;'>{icone_status}</span>", unsafe_allow_html=True)
+            
+            # Botão de alternar status com 1 clique
+            label_btn = "Marcar Vendido" if eh_disp else "Reativar"
+            if col_e4.button(label_btn, key=f"btn_toggle_{item['email']}_{idx}"):
+                item["status"] = "Vendido" if eh_disp else "Disponível"
+                _gravar_emails_salvos(st.session_state.emails_salvos)
+                st.rerun()
+
+            # Excluir item
+            if col_e5.button("🗑️", key=f"del_{item['email']}_{idx}", help="Excluir do estoque"):
+                st.session_state.emails_salvos = [x for x in st.session_state.emails_salvos if x["email"] != item["email"]]
+                _gravar_emails_salvos(st.session_state.emails_salvos)
+                st.rerun()
+
+        st.divider()
         c_down1, c_down2 = st.columns([1, 1])
+        df_exp = pd.DataFrame(st.session_state.emails_salvos)
+        df_exp.columns = [c.capitalize() for c in df_exp.columns]
         c_down1.download_button(
-            "Baixar Salvos · CSV",
-            data=para_csv_bytes(df_salvos),
-            file_name="meus_emails_salvos.csv",
+            "Exportar Estoque Completo · CSV",
+            data=para_csv_bytes(df_exp),
+            file_name="estoque_emails_vendas.csv",
             mime="text/csv",
             use_container_width=True,
         )
-        if c_down2.button("Limpar todos os salvos", type="secondary", use_container_width=True):
+        if c_down2.button("Limpar todo o estoque", type="secondary", use_container_width=True):
             st.session_state.emails_salvos = []
             _gravar_emails_salvos([])
             st.rerun()
     else:
-        st.info("Nenhum e-mail salvo ainda. Cole ou salve um e-mail acima!")
+        st.info("Nenhum e-mail no estoque. Adicione ou importe um lote acima!")
