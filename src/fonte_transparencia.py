@@ -265,10 +265,17 @@ def consultar_painel_cadastro(
         }
 
         url_query = f"{PENTAHO_BASE}/pentaho/plugin/cda/api/doQuery?"
-        resp = sessao.post(url_query, data=payload, timeout=45, verify=False)
-        resp.raise_for_status()
-
-        dados = resp.json()
+        # timeout = (connect_timeout, read_timeout)
+        try:
+            resp = sessao.post(url_query, data=payload, timeout=(20, 120), verify=False)
+            resp.raise_for_status()
+            dados = resp.json()
+        except Exception:
+            # Fallback automático: caso o Pentaho bloqueie IP dos EUA (Streamlit Cloud),
+            # busca direto no CKAN (dados.pe.gov.br) que é uma CDN pública aberta mundialmente
+            recurso = recurso_mais_recente(tipo="ativos", sessao=sessao)
+            df_fallback = baixar_dataframe(recurso, filtro_instituicao=lotacao.strip(), sessao=sessao)
+            return df_fallback
         colunas_meta = [c["colName"] for c in dados.get("metadata", [])]
         linhas = dados.get("resultset", [])
 
