@@ -318,6 +318,9 @@ st.caption(
     f"Mostrando **{ini + 1} a {min(fim, len(filtrado)):,}** de **{len(filtrado):,} linhas** · Página {pagina} de {n_paginas}".replace(",", ".")
 )
 
+# Marca booleanamente se a linha é a 2ª, 3ª repetição em diante do mesmo e-mail (a 1ª fica False/normal)
+res["Eh_Repeticao_Posterior"] = res.duplicated(subset=["Email Gerado"], keep="first") & (res["Email Gerado"] != "")
+
 colunas_uteis = [c for c in [
     "Nome Original",
     "Cargo",
@@ -326,30 +329,16 @@ colunas_uteis = [c for c in [
 
 pagina_df = filtrado.iloc[ini:fim]
 
-# Pré-computa o conjunto de TODOS os e-mails que aparecem mais de uma vez na base inteira
-_contagem_emails = res["Email Gerado"].value_counts()
-_emails_duplicados_set = set(_contagem_emails[_contagem_emails > 1].index)
-_emails_duplicados_set.discard("")
-
 # Tabela HTML interativa com cópia direta com 1 clique (sem bloqueio de canvas)
 def _renderizar_tabela_clicavel(df_sub: pd.DataFrame):
     linhas_html = []
     for _, row in df_sub.iterrows():
-        status_val = str(row.get("Status", "")).upper()
-        email_val = str(row.get("Email Gerado", "") or "").strip()
+        eh_repeticao = bool(row.get("Eh_Repeticao_Posterior", False))
         
-        # É duplicado se o mesmo e-mail foi gerado para 2+ linhas ou tem status CONFLITO/DUPLICADO
-        eh_duplicado = (
-            email_val in _emails_duplicados_set
-            or "CONFLITO" in status_val
-            or "DUPLICADO" in status_val
-            or bool(row.get("Conflito Com"))
-        )
-        
-        bg_tr = "background-color: rgba(245, 166, 35, 0.12); color: #f5a623;" if eh_duplicado else "color: #ededed;"
+        bg_tr = "background-color: rgba(245, 166, 35, 0.12); color: #f5a623;" if eh_repeticao else "color: #ededed;"
         badge_style = (
             "background: rgba(245, 166, 35, 0.15); border: 1px solid rgba(245, 166, 35, 0.5); color: #f5a623;"
-            if eh_duplicado
+            if eh_repeticao
             else "background: #0a0a0a; border: 1px solid #222222; color: #ffffff;"
         )
         
@@ -357,7 +346,7 @@ def _renderizar_tabela_clicavel(df_sub: pd.DataFrame):
         for col in colunas_uteis:
             val = str(row.get(col, "") or "")
             if col == "Email Gerado" and val:
-                aviso_dup = " (REPETIDO)" if eh_duplicado else ""
+                aviso_dup = " (REPETIDO)" if eh_repeticao else ""
                 tds.append(
                     f'<td style="padding: 12px 16px; border-bottom: 1px solid #141414;">'
                     f'<span class="email-btn-copy" onclick="copiarEmail(this, \'{val}\')" title="Clique para copiar{aviso_dup}" style="cursor: pointer; {badge_style} padding: 6px 12px; border-radius: 6px; display: inline-flex; align-items: center; gap: 8px; font-family: \'Geist Mono\', monospace; font-size: 13px; transition: all 0.15s ease;">'
