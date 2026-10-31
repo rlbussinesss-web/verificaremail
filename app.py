@@ -261,132 +261,225 @@ def _obter_resultado_padrao():
 
 res = _obter_resultado_padrao()
 
-# Barra de busca e filtro rápido de repetições
-b1, b2, b3 = st.columns([1.5, 1.5, 1])
-busca_nome = b1.text_input("Buscar por nome", placeholder="Digite o nome...")
-busca_email = b2.text_input("Buscar por e-mail", placeholder="Digite o e-mail...")
-ocultar_repetidos = b3.checkbox("Ocultar repetidos", value=False, help="Mostra apenas os primeiros e-mails únicos e válidos.")
+# Sistema de Armazenamento Persistente de E-mails Salvos
+ARQUIVO_SALVOS = RAIZ / "data" / "emails_salvos.json"
 
-filtrado = res
-if busca_nome:
-    filtrado = filtrado[filtrado["Nome Original"].str.contains(busca_nome, case=False, na=False)]
-if busca_email:
-    filtrado = filtrado[filtrado["Email Gerado"].str.contains(busca_email, case=False, na=False)]
-if ocultar_repetidos:
-    filtrado = filtrado[~filtrado["Eh_Repeticao_Posterior"]]
+def _carregar_emails_salvos() -> list[dict]:
+    if ARQUIVO_SALVOS.exists():
+        try:
+            import json
+            return json.loads(ARQUIVO_SALVOS.read_text(encoding="utf-8"))
+        except Exception:
+            return []
+    return []
 
-p1, p2 = st.columns([1, 2.5])
-tam_pagina = p1.selectbox("Linhas por bloco", [50, 100, 200, 500, 1000], index=0)
-n_paginas = max(1, (len(filtrado) + tam_pagina - 1) // tam_pagina)
+def _gravar_emails_salvos(lista: list[dict]) -> None:
+    import json
+    ARQUIVO_SALVOS.parent.mkdir(parents=True, exist_ok=True)
+    ARQUIVO_SALVOS.write_text(json.dumps(lista, ensure_ascii=False, indent=2), encoding="utf-8")
 
-saltos_50 = [i * tam_pagina for i in range(1, min(n_paginas + 1, 2001))]
+if "emails_salvos" not in st.session_state:
+    st.session_state.emails_salvos = _carregar_emails_salvos()
 
-limite_escolhido = p2.selectbox(
-    f"Linha limite (de {tam_pagina} em {tam_pagina})",
-    options=saltos_50,
-    format_func=lambda v: f"{v} (linhas {v - tam_pagina + 1} a {min(v, len(filtrado))})"
-)
-pagina = (limite_escolhido // tam_pagina)
-ini = limite_escolhido - tam_pagina
-fim = limite_escolhido
+tab_geral, tab_salvos = st.tabs(["Servidores & E-mails (65.483)", f"Meus E-mails Salvos ({len(st.session_state.emails_salvos)})"])
 
-st.caption(
-    f"Mostrando **{ini + 1} a {min(fim, len(filtrado)):,}** de **{len(filtrado):,} linhas** · Página {pagina} de {n_paginas}".replace(",", ".")
-)
+with tab_geral:
+    # Barra de busca e filtro rápido de repetições
+    b1, b2, b3 = st.columns([1.5, 1.5, 1])
+    busca_nome = b1.text_input("Buscar por nome", placeholder="Digite o nome...")
+    busca_email = b2.text_input("Buscar por e-mail", placeholder="Digite o e-mail...")
+    ocultar_repetidos = b3.checkbox("Ocultar repetidos", value=False, help="Mostra apenas os primeiros e-mails únicos e válidos.")
 
-# Marca booleanamente se a linha é a 2ª, 3ª repetição em diante do mesmo e-mail (a 1ª fica False/normal)
-res["Eh_Repeticao_Posterior"] = res.duplicated(subset=["Email Gerado"], keep="first") & (res["Email Gerado"] != "")
+    filtrado = res
+    if busca_nome:
+        filtrado = filtrado[filtrado["Nome Original"].str.contains(busca_nome, case=False, na=False)]
+    if busca_email:
+        filtrado = filtrado[filtrado["Email Gerado"].str.contains(busca_email, case=False, na=False)]
+    if ocultar_repetidos:
+        filtrado = filtrado[~filtrado["Eh_Repeticao_Posterior"]]
 
-colunas_uteis = [c for c in [
-    "Nome Original",
-    "Cargo",
-    "Email Gerado",
-] if c in filtrado.columns]
+    p1, p2 = st.columns([1, 2.5])
+    tam_pagina = p1.selectbox("Linhas por bloco", [50, 100, 200, 500, 1000], index=0)
+    n_paginas = max(1, (len(filtrado) + tam_pagina - 1) // tam_pagina)
 
-pagina_df = filtrado.iloc[ini:fim]
+    saltos_50 = [i * tam_pagina for i in range(1, min(n_paginas + 1, 2001))]
 
-# Tabela HTML interativa com cópia direta com 1 clique (sem bloqueio de canvas)
-def _renderizar_tabela_clicavel(df_sub: pd.DataFrame):
-    linhas_html = []
-    for _, row in df_sub.iterrows():
-        eh_repeticao = bool(row.get("Eh_Repeticao_Posterior", False))
-        
-        bg_tr = "background-color: rgba(245, 166, 35, 0.12); color: #f5a623;" if eh_repeticao else "color: #ededed;"
-        badge_style = (
-            "background: rgba(245, 166, 35, 0.15); border: 1px solid rgba(245, 166, 35, 0.5); color: #f5a623;"
-            if eh_repeticao
-            else "background: #0a0a0a; border: 1px solid #222222; color: #ffffff;"
-        )
-        
-        tds = []
-        for col in colunas_uteis:
-            val = str(row.get(col, "") or "")
-            if col == "Email Gerado" and val:
-                aviso_dup = " (REPETIDO)" if eh_repeticao else ""
-                tds.append(
-                    f'<td style="padding: 12px 16px; border-bottom: 1px solid #141414;">'
-                    f'<span class="email-btn-copy" onclick="copiarEmail(this, \'{val}\')" title="Clique para copiar{aviso_dup}" style="cursor: pointer; {badge_style} padding: 6px 12px; border-radius: 6px; display: inline-flex; align-items: center; gap: 8px; font-family: \'Geist Mono\', monospace; font-size: 13px; transition: all 0.15s ease;">'
-                    f'<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="opacity: 0.7;"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>'
-                    f'{val}</span></td>'
-                )
-            elif col == "Nome Original":
-                tds.append(f'<td style="padding: 12px 16px; border-bottom: 1px solid #141414; font-size: 13.5px; font-weight: 500; letter-spacing: -0.01em;">{val}</td>')
-            else:
-                tds.append(f'<td style="padding: 12px 16px; border-bottom: 1px solid #141414; font-size: 13px; color: #777777;">{val}</td>')
-        linhas_html.append(f'<tr style="{bg_tr}" class="table-row-hover">{"".join(tds)}</tr>')
-        
-    ths = "".join(f'<th style="padding: 12px 16px; background: #050505; color: #666666; text-align: left; font-size: 11px; text-transform: uppercase; font-weight: 600; letter-spacing: 0.06em; border-bottom: 1px solid #1f1f1f;">{c}</th>' for c in colunas_uteis)
-    
-    html_code = (
-        '<style>'
-        '@import url("https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap");'
-        '.table-row-hover:hover { background-color: #080808 !important; }'
-        '.email-btn-copy:hover { border-color: #ffffff !important; background-color: #141414 !important; }'
-        '</style>'
-        '<div id="tabela-container" style="overflow-x: auto; max-height: 560px; border: 1px solid #1f1f1f; border-radius: 10px; background: #000000; font-family: \'Geist\', -apple-system, sans-serif;">'
-        '<table style="width: 100%; border-collapse: collapse; white-space: nowrap;">'
-        '<thead style="position: sticky; top: 0; z-index: 2;">'
-        f'<tr>{ths}</tr>'
-        '</thead>'
-        f'<tbody>{"".join(linhas_html)}</tbody>'
-        '</table>'
-        '</div>'
-        '<div id="toast-aviso" style="display:none; position: fixed; bottom: 24px; right: 24px; background: #ffffff; color: #000000; padding: 10px 18px; border-radius: 8px; font-weight: 600; font-size: 13px; box-shadow: 0 8px 30px rgba(0,0,0,0.8); z-index: 99999; font-family: \'Geist\', sans-serif;"></div>'
-        """<script>
-        function copiarEmail(elem, email) {
-            function sucesso() {
-                var toast = document.getElementById("toast-aviso");
-                toast.innerHTML = "✓ Copiado: " + email;
-                toast.style.display = "block";
-                elem.style.background = "#1f1f1f";
-                elem.style.borderColor = "#ffffff";
-                setTimeout(function() {
-                    toast.style.display = "none";
-                    elem.style.background = "#0a0a0a";
-                    elem.style.borderColor = "#222222";
-                }, 1800);
-            }
-            if (navigator.clipboard && navigator.clipboard.writeText) {
-                navigator.clipboard.writeText(email).then(sucesso).catch(function() {
-                    copiarFallback(email, sucesso);
-                });
-            } else {
-                copiarFallback(email, sucesso);
-            }
-        }
-        function copiarFallback(email, callback) {
-            var temp = document.createElement("input");
-            temp.value = email;
-            document.body.appendChild(temp);
-            temp.select();
-            try {
-                document.execCommand("copy");
-                callback();
-            } catch(e) {}
-            document.body.removeChild(temp);
-        }
-        </script>"""
+    limite_escolhido = p2.selectbox(
+        f"Linha limite (de {tam_pagina} em {tam_pagina})",
+        options=saltos_50,
+        format_func=lambda v: f"{v} (linhas {v - tam_pagina + 1} a {min(v, len(filtrado))})"
     )
-    st.components.v1.html(html_code, height=580, scrolling=True)
+    pagina = (limite_escolhido // tam_pagina)
+    ini = limite_escolhido - tam_pagina
+    fim = limite_escolhido
 
-_renderizar_tabela_clicavel(pagina_df)
+    st.caption(
+        f"Mostrando **{ini + 1} a {min(fim, len(filtrado)):,}** de **{len(filtrado):,} linhas** · Página {pagina} de {n_paginas}".replace(",", ".")
+    )
+
+    colunas_uteis = [c for c in [
+        "Nome Original",
+        "Cargo",
+        "Email Gerado",
+    ] if c in filtrado.columns]
+
+    pagina_df = filtrado.iloc[ini:fim]
+
+    # Tabela HTML interativa com cópia direta com 1 clique (sem bloqueio de canvas)
+    def _renderizar_tabela_clicavel(df_sub: pd.DataFrame):
+        linhas_html = []
+        for _, row in df_sub.iterrows():
+            eh_repeticao = bool(row.get("Eh_Repeticao_Posterior", False))
+            
+            bg_tr = "background-color: rgba(245, 166, 35, 0.12); color: #f5a623;" if eh_repeticao else "color: #ededed;"
+            badge_style = (
+                "background: rgba(245, 166, 35, 0.15); border: 1px solid rgba(245, 166, 35, 0.5); color: #f5a623;"
+                if eh_repeticao
+                else "background: #0a0a0a; border: 1px solid #222222; color: #ffffff;"
+            )
+            
+            tds = []
+            for col in colunas_uteis:
+                val = str(row.get(col, "") or "")
+                if col == "Email Gerado" and val:
+                    aviso_dup = " (REPETIDO)" if eh_repeticao else ""
+                    tds.append(
+                        f'<td style="padding: 12px 16px; border-bottom: 1px solid #141414;">'
+                        f'<span class="email-btn-copy" onclick="copiarEmail(this, \'{val}\')" title="Clique para copiar{aviso_dup}" style="cursor: pointer; {badge_style} padding: 6px 12px; border-radius: 6px; display: inline-flex; align-items: center; gap: 8px; font-family: \'Geist Mono\', monospace; font-size: 13px; transition: all 0.15s ease;">'
+                        f'<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="opacity: 0.7;"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>'
+                        f'{val}</span></td>'
+                    )
+                elif col == "Nome Original":
+                    tds.append(f'<td style="padding: 12px 16px; border-bottom: 1px solid #141414; font-size: 13.5px; font-weight: 500; letter-spacing: -0.01em;">{val}</td>')
+                else:
+                    tds.append(f'<td style="padding: 12px 16px; border-bottom: 1px solid #141414; font-size: 13px; color: #777777;">{val}</td>')
+            linhas_html.append(f'<tr style="{bg_tr}" class="table-row-hover">{"".join(tds)}</tr>')
+            
+        ths = "".join(f'<th style="padding: 12px 16px; background: #050505; color: #666666; text-align: left; font-size: 11px; text-transform: uppercase; font-weight: 600; letter-spacing: 0.06em; border-bottom: 1px solid #1f1f1f;">{c}</th>' for c in colunas_uteis)
+        
+        html_code = (
+            '<style>'
+            '@import url("https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap");'
+            '.table-row-hover:hover { background-color: #080808 !important; }'
+            '.email-btn-copy:hover { border-color: #ffffff !important; background-color: #141414 !important; }'
+            '</style>'
+            '<div id="tabela-container" style="overflow-x: auto; max-height: 560px; border: 1px solid #1f1f1f; border-radius: 10px; background: #000000; font-family: \'Geist\', -apple-system, sans-serif;">'
+            '<table style="width: 100%; border-collapse: collapse; white-space: nowrap;">'
+            '<thead style="position: sticky; top: 0; z-index: 2;">'
+            f'<tr>{ths}</tr>'
+            '</thead>'
+            f'<tbody>{"".join(linhas_html)}</tbody>'
+            '</table>'
+            '</div>'
+            '<div id="toast-aviso" style="display:none; position: fixed; bottom: 24px; right: 24px; background: #ffffff; color: #000000; padding: 10px 18px; border-radius: 8px; font-weight: 600; font-size: 13px; box-shadow: 0 8px 30px rgba(0,0,0,0.8); z-index: 99999; font-family: \'Geist\', sans-serif;"></div>'
+            """<script>
+            function copiarEmail(elem, email) {
+                function sucesso() {
+                    var toast = document.getElementById("toast-aviso");
+                    toast.innerHTML = "✓ Copiado: " + email;
+                    toast.style.display = "block";
+                    elem.style.background = "#1f1f1f";
+                    elem.style.borderColor = "#ffffff";
+                    setTimeout(function() {
+                        toast.style.display = "none";
+                        elem.style.background = "#0a0a0a";
+                        elem.style.borderColor = "#222222";
+                    }, 1800);
+                }
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                    navigator.clipboard.writeText(email).then(sucesso).catch(function() {
+                        copiarFallback(email, sucesso);
+                    });
+                } else {
+                    copiarFallback(email, sucesso);
+                }
+            }
+            function copiarFallback(email, callback) {
+                var temp = document.createElement("input");
+                temp.value = email;
+                document.body.appendChild(temp);
+                temp.select();
+                try {
+                    document.execCommand("copy");
+                    callback();
+                } catch(e) {}
+                document.body.removeChild(temp);
+            }
+            </script>"""
+        )
+        st.components.v1.html(html_code, height=580, scrolling=True)
+
+    _renderizar_tabela_clicavel(pagina_df)
+
+with tab_salvos:
+    st.subheader("Armazenamento de E-mails")
+    st.caption("Guarde aqui os e-mails que você separou para utilizar sempre que quiser.")
+
+    with st.container(border=True):
+        col_in1, col_in2, col_in3 = st.columns([2, 1.5, 1])
+        novo_email = col_in1.text_input("E-mail a salvar", placeholder="exemplo.sobrenome@professor.educacao.pe.gov.br")
+        nova_nota = col_in2.text_input("Nota / Descrição (opcional)", placeholder="Ex: Testado OK, Contato...")
+        
+        if col_in3.button("Salvar E-mail", type="primary", use_container_width=True):
+            if novo_email.strip():
+                email_limpo = novo_email.strip().lower()
+                existe = any(x["email"] == email_limpo for x in st.session_state.emails_salvos)
+                if not existe:
+                    from datetime import datetime
+                    agora = datetime.now().strftime("%d/%m/%Y %H:%M")
+                    st.session_state.emails_salvos.insert(0, {
+                        "email": email_limpo,
+                        "nota": nova_nota.strip(),
+                        "data": agora
+                    })
+                    _gravar_emails_salvos(st.session_state.emails_salvos)
+                    st.success(f"E-mail {email_limpo} salvo!")
+                    st.rerun()
+                else:
+                    st.warning("Este e-mail já está na sua lista.")
+            else:
+                st.error("Digite um e-mail válido.")
+
+    # Opção de colagem em lote
+    with st.expander("Colar múltiplos e-mails de uma vez"):
+        lote_txt = st.text_area("Cole aqui vários e-mails (um por linha):", height=100)
+        if st.button("Salvar todos em lote"):
+            linhas_lote = [l.strip().lower() for l in lote_txt.splitlines() if "@" in l]
+            adicionados = 0
+            from datetime import datetime
+            agora = datetime.now().strftime("%d/%m/%Y %H:%M")
+            emails_existentes = {x["email"] for x in st.session_state.emails_salvos}
+            for em in linhas_lote:
+                if em not in emails_existentes:
+                    st.session_state.emails_salvos.insert(0, {
+                        "email": em,
+                        "nota": "Lote",
+                        "data": agora
+                    })
+                    emails_existentes.add(em)
+                    adicionados += 1
+            if adicionados > 0:
+                _gravar_emails_salvos(st.session_state.emails_salvos)
+                st.success(f"{adicionados} novos e-mails salvos!")
+                st.rerun()
+
+    if st.session_state.emails_salvos:
+        st.write(f"Total salvos: **{len(st.session_state.emails_salvos)}**")
+        df_salvos = pd.DataFrame(st.session_state.emails_salvos)
+        df_salvos.columns = ["E-mail", "Nota", "Data Salvo"]
+        st.dataframe(df_salvos, use_container_width=True)
+        
+        c_down1, c_down2 = st.columns([1, 1])
+        c_down1.download_button(
+            "Baixar Salvos · CSV",
+            data=para_csv_bytes(df_salvos),
+            file_name="meus_emails_salvos.csv",
+            mime="text/csv",
+            use_container_width=True,
+        )
+        if c_down2.button("Limpar todos os salvos", type="secondary", use_container_width=True):
+            st.session_state.emails_salvos = []
+            _gravar_emails_salvos([])
+            st.rerun()
+    else:
+        st.info("Nenhum e-mail salvo ainda. Cole ou salve um e-mail acima!")
