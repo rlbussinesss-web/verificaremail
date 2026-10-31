@@ -272,10 +272,17 @@ def consultar_painel_cadastro(
             dados = resp.json()
         except Exception:
             # Fallback automático: caso o Pentaho bloqueie IP dos EUA (Streamlit Cloud),
-            # busca direto no CKAN (dados.pe.gov.br) que é uma CDN pública aberta mundialmente
-            recurso = recurso_mais_recente(tipo="ativos", sessao=sessao)
-            df_fallback = baixar_dataframe(recurso, filtro_instituicao=lotacao.strip(), sessao=sessao)
-            return df_fallback
+            # busca direto no CKAN (dados.pe.gov.br) que é uma CDN pública aberta mundialmente.
+            # Baixa tanto os ativos quanto os demais vínculos da Educação
+            recurso_atv = recurso_mais_recente(tipo="ativos", sessao=sessao)
+            df_atv = baixar_dataframe(recurso_atv, filtro_instituicao="EDUCAC", sessao=sessao)
+            try:
+                recurso_inat = recurso_mais_recente(tipo="inativos", sessao=sessao)
+                df_inat = baixar_dataframe(recurso_inat, filtro_instituicao="EDUCAC", sessao=sessao)
+                df_total = pd.concat([df_atv, df_inat], ignore_index=True).drop_duplicates(subset=["Matrícula", "Nome Completo"])
+            except Exception:
+                df_total = df_atv
+            return df_total
         colunas_meta = [c["colName"] for c in dados.get("metadata", [])]
         linhas = dados.get("resultset", [])
 
