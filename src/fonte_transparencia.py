@@ -219,25 +219,19 @@ PENTAHO_DASH_URL = (
 PENTAHO_CDA_PATH = "/public/OpenReports/Portal_Producao/Painel_cadastro_servidores/Painel_cadastro_servidores.cda"
 
 
+@st.cache_data(show_spinner=False, ttl=3600)
 def consultar_painel_cadastro(
     lotacao: str = "SECRETARIA DE EDUCACAO",
     ano: str = "0",
     mes: str = "0",
     matricula: str = "",
     nome_servidor: str = "",
-    progresso: Progresso = None,
-    sessao: Optional[requests.Session] = None,
 ) -> pd.DataFrame:
     """Consulta diretamente o backend do Painel de Cadastro dos Servidores da Transparência de PE.
     
     Retorna o DataFrame completo com todos os servidores cadastrados (ex: 65.483 servidores da Educação).
     """
-    def _p(frac: float, msg: str) -> None:
-        if progresso:
-            progresso(max(0.0, min(1.0, frac)), msg)
-
-    fechar = sessao is None
-    sessao = sessao or requests.Session()
+    sessao = requests.Session()
     sessao.headers.update({
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
         "Origin": PENTAHO_BASE,
@@ -245,11 +239,9 @@ def consultar_painel_cadastro(
     })
 
     try:
-        _p(0.1, "Iniciando sessão com o Painel de Cadastro dos Servidores...")
         # 1. Obtém sessão/cookie do dashboard
         sessao.get(PENTAHO_DASH_URL, timeout=TIMEOUT)
 
-        _p(0.25, f"Consultando cadastro oficial de {lotacao}...")
         payload = {
             "parampara_ano": ano if ano != "Todos" else "0",
             "paramoffset_": "0",
@@ -272,7 +264,6 @@ def consultar_painel_cadastro(
         resp = sessao.post(url_query, data=payload, timeout=TIMEOUT)
         resp.raise_for_status()
 
-        _p(0.75, "Processando dados recebidos do portal...")
         dados = resp.json()
         colunas_meta = [c["colName"] for c in dados.get("metadata", [])]
         linhas = dados.get("resultset", [])
