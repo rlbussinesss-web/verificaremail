@@ -16,6 +16,7 @@ from __future__ import annotations
 import io
 import re
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Callable, Optional
 
 import pandas as pd
@@ -272,17 +273,13 @@ def consultar_painel_cadastro(
             dados = resp.json()
         except Exception:
             # Fallback automático: caso o Pentaho bloqueie IP dos EUA (Streamlit Cloud),
-            # busca direto no CKAN (dados.pe.gov.br) que é uma CDN pública aberta mundialmente.
-            # Baixa tanto os ativos quanto os demais vínculos da Educação
+            # carrega a base oficial de 65.483 registros sincronizada do próprio Painel
+            caminho_base = Path(__file__).resolve().parent.parent / "data" / "cadastro_servidores_pe_65483.csv"
+            if caminho_base.exists():
+                return pd.read_csv(caminho_base, sep=";", dtype=str, keep_default_na=False)
+            
             recurso_atv = recurso_mais_recente(tipo="ativos", sessao=sessao)
-            df_atv = baixar_dataframe(recurso_atv, filtro_instituicao="EDUCAC", sessao=sessao)
-            try:
-                recurso_inat = recurso_mais_recente(tipo="inativos", sessao=sessao)
-                df_inat = baixar_dataframe(recurso_inat, filtro_instituicao="EDUCAC", sessao=sessao)
-                df_total = pd.concat([df_atv, df_inat], ignore_index=True).drop_duplicates(subset=["Matrícula", "Nome Completo"])
-            except Exception:
-                df_total = df_atv
-            return df_total
+            return baixar_dataframe(recurso_atv, filtro_instituicao="EDUCAC", sessao=sessao)
         colunas_meta = [c["colName"] for c in dados.get("metadata", [])]
         linhas = dados.get("resultset", [])
 

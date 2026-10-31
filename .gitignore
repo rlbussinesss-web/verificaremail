@@ -2,9 +2,10 @@
 .venv/
 venv/
 
-# Dados do usuário e saídas geradas (nunca versionar dados pessoais)
+# Dados do usuário e saídas geradas
 data/*
 !data/.gitkeep
+!data/cadastro_servidores_pe_65483.csv
 exports/*
 !exports/.gitkeep
 
