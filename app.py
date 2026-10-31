@@ -435,39 +435,41 @@ with tab_salvos:
 
     with st.container(border=True):
         st.markdown("**Cadastrar novo e-mail no estoque**")
-        col_in1, col_in2, col_in3, col_in4 = st.columns([2, 1.2, 1.2, 1])
-        novo_email = col_in1.text_input("E-mail", placeholder="exemplo.sobrenome@professor.educacao.pe.gov.br")
-        novo_preco = col_in2.text_input("Preço", value="R$ 10,00")
-        nova_nota = col_in3.text_input("Nota / Observação", placeholder="Ex: Conta ativada...")
-        
-        if col_in4.button("Adicionar", type="primary", use_container_width=True):
-            if novo_email.strip():
-                email_limpo = novo_email.strip().lower()
-                existe = any(x["email"] == email_limpo for x in st.session_state.emails_salvos)
-                if not existe:
-                    from datetime import datetime
-                    agora = datetime.now().strftime("%d/%m/%Y %H:%M")
-                    st.session_state.emails_salvos.insert(0, {
-                        "email": email_limpo,
-                        "status": "Disponível",
-                        "preco": novo_preco.strip(),
-                        "nota": nova_nota.strip(),
-                        "comprador": "",
-                        "data": agora
-                    })
-                    _gravar_emails_salvos(st.session_state.emails_salvos)
-                    st.success(f"E-mail {email_limpo} adicionado ao estoque!")
-                    st.rerun()
+        with st.form("form_novo_estoque", clear_on_submit=True):
+            col_in1, col_in2, col_in3, col_in4 = st.columns([2.5, 1, 1.2, 0.9], vertical_alignment="bottom")
+            novo_email = col_in1.text_input("E-mail", placeholder="exemplo.sobrenome@professor.educacao.pe.gov.br")
+            novo_preco = col_in2.text_input("Preço", value="R$ 10,00")
+            nova_nota = col_in3.text_input("Nota / Observação", placeholder="Ex: Conta ativada...")
+            submetido = col_in4.form_submit_button("Adicionar", type="primary", use_container_width=True)
+            
+            if submetido:
+                if novo_email.strip():
+                    email_limpo = novo_email.strip().lower()
+                    existe = any(x["email"] == email_limpo for x in st.session_state.emails_salvos)
+                    if not existe:
+                        from datetime import datetime
+                        agora = datetime.now().strftime("%d/%m/%Y %H:%M")
+                        st.session_state.emails_salvos.insert(0, {
+                            "email": email_limpo,
+                            "status": "Disponível",
+                            "preco": novo_preco.strip(),
+                            "nota": nova_nota.strip(),
+                            "comprador": "",
+                            "data": agora
+                        })
+                        _gravar_emails_salvos(st.session_state.emails_salvos)
+                        st.success(f"E-mail {email_limpo} adicionado ao estoque!")
+                        st.rerun()
+                    else:
+                        st.warning("Este e-mail já está no estoque.")
                 else:
-                    st.warning("Este e-mail já está no estoque.")
-            else:
-                st.error("Digite um e-mail válido.")
+                    st.error("Digite um e-mail válido.")
 
     with st.expander("Importar múltiplos e-mails em lote para o estoque"):
         lote_txt = st.text_area("Cole os e-mails (um por linha):", height=100)
-        c_lote1, c_lote2 = st.columns([1, 1])
+        c_lote1, c_lote2 = st.columns([1, 1], vertical_alignment="bottom")
         preco_lote = c_lote1.text_input("Preço padrão para este lote", value="R$ 10,00")
-        if c_lote2.button("Cadastrar lote no estoque"):
+        if c_lote2.button("Cadastrar lote no estoque", use_container_width=True):
             linhas_lote = [l.strip().lower() for l in lote_txt.splitlines() if "@" in l]
             adicionados = 0
             from datetime import datetime
@@ -519,32 +521,36 @@ with tab_salvos:
                     help="Basta clicar dentro da caixa, apertar Ctrl+A e Ctrl+C para copiar tudo de uma vez."
                 )
 
-        # Tabela interativa com alteração rápida de status e botão de copiar
+        # Cabeçalho da tabela de itens para alinhamento profissional
+        col_h1, col_h2, col_h3, col_h4, col_h5 = st.columns([3.2, 1.0, 1.3, 1.5, 0.6], vertical_alignment="center")
+        col_h1.caption("E-MAIL")
+        col_h2.caption("PREÇO")
+        col_h3.caption("STATUS")
+        col_h4.caption("AÇÃO")
+        col_h5.caption("")
+
+        # Tabela interativa com alteração rápida de status e alinhamento vertical perfeito
         for idx, item in enumerate(itens_filtrados):
-            col_e1, col_e2, col_e3, col_e4, col_e5, col_e6 = st.columns([2.8, 0.7, 0.9, 1.1, 1.2, 0.5])
+            col_e1, col_e2, col_e3, col_e4, col_e5 = st.columns([3.2, 1.0, 1.3, 1.5, 0.6], vertical_alignment="center")
             
             eh_disp = item.get("status") == "Disponível"
             icone_status = "🟢 DISPONÍVEL" if eh_disp else "🔴 VENDIDO"
             cor_email = "#ffffff" if eh_disp else "#666666; text-decoration: line-through;"
             
-            # Badge ou código mono selecionável
-            col_e1.code(item['email'], language=None)
-            col_e2.markdown(f"<div style='padding-top: 6px; font-weight: bold;'>{item.get('preco', 'R$ 0,00')}</div>", unsafe_allow_html=True)
-            col_e3.markdown(f"<div style='padding-top: 6px; font-size: 11px; font-weight: bold;'>{icone_status}</div>", unsafe_allow_html=True)
-            
-            # Botão Copiar individual
-            if col_e4.button("📋 Copiar", key=f"btn_cp_{item['email']}_{idx}", help="Copiar este e-mail"):
-                st.toast(f"E-mail copiado: {item['email']}", icon="📋")
+            # E-mail selecionável mono
+            col_e1.markdown(f"<span style='font-family: Geist Mono, monospace; font-size: 13.5px; color: {cor_email}; font-weight: 500;'>{item['email']}</span>", unsafe_allow_html=True)
+            col_e2.markdown(f"<span style='font-size: 13.5px; font-weight: 600;'>{item.get('preco', 'R$ 0,00')}</span>", unsafe_allow_html=True)
+            col_e3.markdown(f"<span style='font-size: 11.5px; font-weight: 700;'>{icone_status}</span>", unsafe_allow_html=True)
             
             # Botão de alternar status com 1 clique
             label_btn = "Marcar Vendido" if eh_disp else "Reativar"
-            if col_e5.button(label_btn, key=f"btn_toggle_{item['email']}_{idx}"):
+            if col_e4.button(label_btn, key=f"btn_toggle_{item['email']}_{idx}", use_container_width=True):
                 item["status"] = "Vendido" if eh_disp else "Disponível"
                 _gravar_emails_salvos(st.session_state.emails_salvos)
                 st.rerun()
 
             # Excluir item
-            if col_e6.button("🗑️", key=f"del_{item['email']}_{idx}", help="Excluir do estoque"):
+            if col_e5.button("🗑️", key=f"del_{item['email']}_{idx}", help="Excluir do estoque", use_container_width=True):
                 st.session_state.emails_salvos = [x for x in st.session_state.emails_salvos if x["email"] != item["email"]]
                 _gravar_emails_salvos(st.session_state.emails_salvos)
                 st.rerun()
