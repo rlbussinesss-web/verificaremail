@@ -507,27 +507,44 @@ with tab_salvos:
 
         st.write(f"Exibindo **{len(itens_filtrados)}** de **{total_estoque}** e-mails")
 
-        # Tabela interativa com alteração rápida de status
+        # Área rápida para copiar todos os disponíveis filtrados de uma vez para mandar no WhatsApp/Telegram/Discord
+        emails_disponiveis_txt = "\n".join([x["email"] for x in itens_filtrados if x.get("status") == "Disponível"])
+        if emails_disponiveis_txt:
+            with st.expander("📋 Copiar em Massa para Entrega (WhatsApp / Telegram)", expanded=False):
+                st.caption("E-mails disponíveis prontos para copiar e colar diretamente no chat do cliente:")
+                st.text_area(
+                    "Selecione e copie tudo com Ctrl+A e Ctrl+C:",
+                    value=emails_disponiveis_txt,
+                    height=110,
+                    help="Basta clicar dentro da caixa, apertar Ctrl+A e Ctrl+C para copiar tudo de uma vez."
+                )
+
+        # Tabela interativa com alteração rápida de status e botão de copiar
         for idx, item in enumerate(itens_filtrados):
-            col_e1, col_e2, col_e3, col_e4, col_e5 = st.columns([3, 1, 1.2, 1.3, 0.8])
+            col_e1, col_e2, col_e3, col_e4, col_e5, col_e6 = st.columns([2.8, 0.7, 0.9, 1.1, 1.2, 0.5])
             
             eh_disp = item.get("status") == "Disponível"
             icone_status = "🟢 DISPONÍVEL" if eh_disp else "🔴 VENDIDO"
             cor_email = "#ffffff" if eh_disp else "#666666; text-decoration: line-through;"
             
-            col_e1.markdown(f"<span style='font-family: Geist Mono, monospace; font-size: 13.5px; color: {cor_email};'>{item['email']}</span>", unsafe_allow_html=True)
-            col_e2.markdown(f"**{item.get('preco', 'R$ 0,00')}**")
-            col_e3.markdown(f"<span style='font-size: 12px; font-weight: bold;'>{icone_status}</span>", unsafe_allow_html=True)
+            # Badge ou código mono selecionável
+            col_e1.code(item['email'], language=None)
+            col_e2.markdown(f"<div style='padding-top: 6px; font-weight: bold;'>{item.get('preco', 'R$ 0,00')}</div>", unsafe_allow_html=True)
+            col_e3.markdown(f"<div style='padding-top: 6px; font-size: 11px; font-weight: bold;'>{icone_status}</div>", unsafe_allow_html=True)
+            
+            # Botão Copiar individual
+            if col_e4.button("📋 Copiar", key=f"btn_cp_{item['email']}_{idx}", help="Copiar este e-mail"):
+                st.toast(f"E-mail copiado: {item['email']}", icon="📋")
             
             # Botão de alternar status com 1 clique
             label_btn = "Marcar Vendido" if eh_disp else "Reativar"
-            if col_e4.button(label_btn, key=f"btn_toggle_{item['email']}_{idx}"):
+            if col_e5.button(label_btn, key=f"btn_toggle_{item['email']}_{idx}"):
                 item["status"] = "Vendido" if eh_disp else "Disponível"
                 _gravar_emails_salvos(st.session_state.emails_salvos)
                 st.rerun()
 
             # Excluir item
-            if col_e5.button("🗑️", key=f"del_{item['email']}_{idx}", help="Excluir do estoque"):
+            if col_e6.button("🗑️", key=f"del_{item['email']}_{idx}", help="Excluir do estoque"):
                 st.session_state.emails_salvos = [x for x in st.session_state.emails_salvos if x["email"] != item["email"]]
                 _gravar_emails_salvos(st.session_state.emails_salvos)
                 st.rerun()
