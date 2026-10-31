@@ -452,34 +452,30 @@ with tab_salvos:
     m_f3.metric("🎯 Vendas Realizadas", f"{total_vendidos} e-mails")
     m_f4.metric("📈 Ticket Médio", f"R$ {ticket_medio:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
 
-    # Gráfico de Vendas & Faturamento se houver vendas
-    if total_vendidos > 0 or total_estoque > 0:
-        with st.expander("📊 Gráficos de Desempenho Financeiro & Vendas", expanded=True):
-            g_col1, g_col2 = st.columns([1.5, 1])
-            
-            with g_col1:
-                st.caption("Faturamento Acumulado por E-mails Vendidos (R$)")
-                vendidos_lista = [x for x in st.session_state.emails_salvos if x.get("status") == "Vendido"]
-                if vendidos_lista:
-                    dados_grafico = []
-                    acumulado = 0.0
-                    for i, v in enumerate(reversed(vendidos_lista), 1):
-                        val = _extrair_valor_float(v.get("preco", "0"))
-                        acumulado += val
-                        label_item = v.get("data_venda") or f"Venda #{i}"
-                        dados_grafico.append({"Venda": f"#{i}", "Faturamento (R$)": acumulado, "Valor": val})
-                    df_chart = pd.DataFrame(dados_grafico)
-                    st.line_chart(df_chart.set_index("Venda")[["Faturamento (R$)"]], color="#00ff88")
-                else:
-                    st.info("Nenhuma venda realizada ainda para gerar a curva de faturamento.")
-
-            with g_col2:
-                st.caption("Distribuição do Estoque (Disponíveis vs Vendidos)")
-                df_dist = pd.DataFrame({
-                    "Status": ["Disponíveis", "Vendidos"],
-                    "Quantidade": [total_disponiveis, total_vendidos]
-                })
-                st.bar_chart(df_dist.set_index("Status"), color="#ededed")
+    # Barra de Progresso visual elegante de conversão de estoque (Vendido vs Disponível)
+    if total_estoque > 0:
+        pct_vendido = int((total_vendidos / total_estoque) * 100) if total_estoque > 0 else 0
+        pct_disp = 100 - pct_vendido
+        
+        st.markdown(
+            f"""
+            <div style="background: #080808; border: 1px solid #1a1a1a; border-radius: 10px; padding: 16px 20px; margin: 16px 0 20px 0;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                    <span style="font-size: 13px; font-weight: 600; color: #ededed; text-transform: uppercase; letter-spacing: 0.04em;">Progresso de Vendas do Estoque</span>
+                    <span style="font-size: 13.5px; font-weight: 700; color: #00ff88; font-family: 'Geist Mono', monospace;">{pct_vendido}% CONVERTIDO ({total_vendidos}/{total_estoque})</span>
+                </div>
+                <div style="width: 100%; height: 10px; background: #1a1a1a; border-radius: 999px; overflow: hidden; display: flex;">
+                    <div style="width: {pct_vendido}%; height: 100%; background: #00ff88; transition: width 0.3s ease;"></div>
+                    <div style="width: {pct_disp}%; height: 100%; background: #222222;"></div>
+                </div>
+                <div style="display: flex; justify-content: space-between; margin-top: 8px; font-size: 12px; color: #777777;">
+                    <span>🟢 Vendidos: <strong style="color: #ffffff;">{total_vendidos} e-mails</strong></span>
+                    <span>⚪ Restantes em Estoque: <strong style="color: #ffffff;">{total_disponiveis} e-mails</strong></span>
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
 
     with st.container(border=True):
         st.markdown("**Cadastrar novo e-mail no estoque**")
