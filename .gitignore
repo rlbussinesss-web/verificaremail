@@ -1,0 +1,18 @@
+# Ambiente virtual
+.venv/
+venv/
+
+# Dados do usuário e saídas geradas (nunca versionar dados pessoais)
+data/*
+!data/.gitkeep
+exports/*
+!exports/.gitkeep
+
+# Config local
+config.json
+
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+.streamlit/secrets.toml

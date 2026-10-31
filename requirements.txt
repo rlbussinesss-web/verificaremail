@@ -1,0 +1,9 @@
+# Dependências do Gerador de E-mails Institucionais
+streamlit>=1.63
+pandas>=2.0
+XlsxWriter>=3.2
+openpyxl>=3.1
+charset-normalizer>=3.3
+dnspython>=2.6
+requests>=2.32
+pytest>=8.0
