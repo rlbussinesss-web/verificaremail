@@ -521,36 +521,102 @@ with tab_salvos:
                     help="Basta clicar dentro da caixa, apertar Ctrl+A e Ctrl+C para copiar tudo de uma vez."
                 )
 
-        # Cabeçalho da tabela de itens para alinhamento profissional
-        col_h1, col_h2, col_h3, col_h4, col_h5 = st.columns([3.2, 1.0, 1.3, 1.5, 0.6], vertical_alignment="center")
-        col_h1.caption("E-MAIL")
-        col_h2.caption("PREÇO")
-        col_h3.caption("STATUS")
-        col_h4.caption("AÇÃO")
-        col_h5.caption("")
-
-        # Tabela interativa com alteração rápida de status e alinhamento vertical perfeito
+        # Tabela HTML estilizada com 1-clique para copiar no e-mail
+        linhas_estoque_html = []
         for idx, item in enumerate(itens_filtrados):
-            col_e1, col_e2, col_e3, col_e4, col_e5 = st.columns([3.2, 1.0, 1.3, 1.5, 0.6], vertical_alignment="center")
-            
             eh_disp = item.get("status") == "Disponível"
             icone_status = "🟢 DISPONÍVEL" if eh_disp else "🔴 VENDIDO"
-            cor_email = "#ffffff" if eh_disp else "#666666; text-decoration: line-through;"
-            
-            # E-mail selecionável mono
-            col_e1.markdown(f"<span style='font-family: Geist Mono, monospace; font-size: 13.5px; color: {cor_email}; font-weight: 500;'>{item['email']}</span>", unsafe_allow_html=True)
-            col_e2.markdown(f"<span style='font-size: 13.5px; font-weight: 600;'>{item.get('preco', 'R$ 0,00')}</span>", unsafe_allow_html=True)
-            col_e3.markdown(f"<span style='font-size: 11.5px; font-weight: 700;'>{icone_status}</span>", unsafe_allow_html=True)
-            
-            # Botão de alternar status com 1 clique
+            cor_status = "#00ff88" if eh_disp else "#ff4444"
+            email_val = item["email"]
+            preco_val = item.get("preco", "R$ 0,00")
+            nota_val = item.get("nota", "")
+
+            badge_email_style = (
+                "background: #0a0a0a; border: 1px solid #222222; color: #ffffff;"
+                if eh_disp
+                else "background: #080808; border: 1px solid #1a1a1a; color: #666666; text-decoration: line-through;"
+            )
+
+            linhas_estoque_html.append(
+                f'<tr style="border-bottom: 1px solid #141414;" class="table-row-hover">'
+                f'<td style="padding: 12px 16px;">'
+                f'<span class="email-btn-copy" onclick="copiarEmail(this, \'{email_val}\')" title="Clique para copiar este e-mail" style="cursor: pointer; {badge_email_style} padding: 6px 12px; border-radius: 6px; display: inline-flex; align-items: center; gap: 8px; font-family: \'Geist Mono\', monospace; font-size: 13px; transition: all 0.15s ease;">'
+                f'<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="opacity: 0.7;"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>'
+                f'{email_val}</span></td>'
+                f'<td style="padding: 12px 16px; font-size: 13.5px; font-weight: 600; color: #ffffff;">{preco_val}</td>'
+                f'<td style="padding: 12px 16px; font-size: 11.5px; font-weight: 700; color: {cor_status};">{icone_status}</td>'
+                f'<td style="padding: 12px 16px; font-size: 12px; color: #777777;">{nota_val}</td>'
+                f'</tr>'
+            )
+
+        html_estoque = (
+            '<style>'
+            '@import url("https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap");'
+            '.table-row-hover:hover { background-color: #080808 !important; }'
+            '.email-btn-copy:hover { border-color: #ffffff !important; background-color: #141414 !important; }'
+            '</style>'
+            '<div style="overflow-x: auto; max-height: 480px; border: 1px solid #1f1f1f; border-radius: 10px; background: #000000; font-family: \'Geist\', -apple-system, sans-serif; margin-bottom: 20px;">'
+            '<table style="width: 100%; border-collapse: collapse; white-space: nowrap;">'
+            '<thead style="position: sticky; top: 0; z-index: 2;">'
+            '<tr>'
+            '<th style="padding: 12px 16px; background: #050505; color: #666666; text-align: left; font-size: 11px; text-transform: uppercase; font-weight: 600; letter-spacing: 0.06em; border-bottom: 1px solid #1f1f1f;">E-MAIL (CLIQUE PARA COPIAR)</th>'
+            '<th style="padding: 12px 16px; background: #050505; color: #666666; text-align: left; font-size: 11px; text-transform: uppercase; font-weight: 600; letter-spacing: 0.06em; border-bottom: 1px solid #1f1f1f;">PREÇO</th>'
+            '<th style="padding: 12px 16px; background: #050505; color: #666666; text-align: left; font-size: 11px; text-transform: uppercase; font-weight: 600; letter-spacing: 0.06em; border-bottom: 1px solid #1f1f1f;">STATUS</th>'
+            '<th style="padding: 12px 16px; background: #050505; color: #666666; text-align: left; font-size: 11px; text-transform: uppercase; font-weight: 600; letter-spacing: 0.06em; border-bottom: 1px solid #1f1f1f;">OBSERVAÇÃO</th>'
+            '</tr>'
+            '</thead>'
+            f'<tbody>{"".join(linhas_estoque_html)}</tbody>'
+            '</table>'
+            '</div>'
+            '<div id="toast-aviso-estoque" style="display:none; position: fixed; bottom: 24px; right: 24px; background: #ffffff; color: #000000; padding: 10px 18px; border-radius: 8px; font-weight: 600; font-size: 13px; box-shadow: 0 8px 30px rgba(0,0,0,0.8); z-index: 99999; font-family: \'Geist\', sans-serif;"></div>'
+            """<script>
+            function copiarEmail(elem, email) {
+                function sucesso() {
+                    var toast = document.getElementById("toast-aviso-estoque");
+                    toast.innerText = "Copiado: " + email;
+                    toast.style.display = "block";
+                    elem.style.background = "#1f1f1f";
+                    elem.style.borderColor = "#ffffff";
+                    setTimeout(function() {
+                        toast.style.display = "none";
+                        elem.style.background = "#0a0a0a";
+                        elem.style.borderColor = "#222222";
+                    }, 1800);
+                }
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                    navigator.clipboard.writeText(email).then(sucesso).catch(function() {
+                        copiarFallback(email, sucesso);
+                    });
+                } else {
+                    copiarFallback(email, sucesso);
+                }
+            }
+            function copiarFallback(email, callback) {
+                var temp = document.createElement("input");
+                temp.value = email;
+                document.body.appendChild(temp);
+                temp.select();
+                try {
+                    document.execCommand("copy");
+                    callback();
+                } catch(e) {}
+                document.body.removeChild(temp);
+            }
+            </script>"""
+        )
+        st.components.v1.html(html_estoque, height=min(500, max(140, len(itens_filtrados) * 55 + 60)), scrolling=True)
+
+        st.caption("Ações rápidas de venda / baixa:")
+        for idx, item in enumerate(itens_filtrados):
+            col_a1, col_a2, col_a3 = st.columns([3, 1.2, 0.6], vertical_alignment="center")
+            eh_disp = item.get("status") == "Disponível"
+            col_a1.markdown(f"<span style='font-family: Geist Mono, monospace; font-size: 13px; color: {'#ffffff' if eh_disp else '#666666'};'>{item['email']}</span>", unsafe_allow_html=True)
             label_btn = "Marcar Vendido" if eh_disp else "Reativar"
-            if col_e4.button(label_btn, key=f"btn_toggle_{item['email']}_{idx}", use_container_width=True):
+            if col_a2.button(label_btn, key=f"btn_toggle_{item['email']}_{idx}", use_container_width=True):
                 item["status"] = "Vendido" if eh_disp else "Disponível"
                 _gravar_emails_salvos(st.session_state.emails_salvos)
                 st.rerun()
-
-            # Excluir item
-            if col_e5.button("🗑️", key=f"del_{item['email']}_{idx}", help="Excluir do estoque", use_container_width=True):
+            if col_a3.button("🗑️", key=f"del_{item['email']}_{idx}", help="Excluir do estoque", use_container_width=True):
                 st.session_state.emails_salvos = [x for x in st.session_state.emails_salvos if x["email"] != item["email"]]
                 _gravar_emails_salvos(st.session_state.emails_salvos)
                 st.rerun()
