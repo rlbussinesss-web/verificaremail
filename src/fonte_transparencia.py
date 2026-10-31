@@ -240,8 +240,11 @@ def consultar_painel_cadastro(
     })
 
     try:
-        # 1. Obtém sessão/cookie do dashboard
-        sessao.get(PENTAHO_DASH_URL, timeout=TIMEOUT)
+        # 1. Obtém sessão/cookie do dashboard com timeout de 30s
+        try:
+            sessao.get(PENTAHO_DASH_URL, timeout=30, verify=False)
+        except Exception:
+            pass
 
         payload = {
             "parampara_ano": ano if ano != "Todos" else "0",
@@ -262,7 +265,7 @@ def consultar_painel_cadastro(
         }
 
         url_query = f"{PENTAHO_BASE}/pentaho/plugin/cda/api/doQuery?"
-        resp = sessao.post(url_query, data=payload, timeout=TIMEOUT)
+        resp = sessao.post(url_query, data=payload, timeout=45, verify=False)
         resp.raise_for_status()
 
         dados = resp.json()
