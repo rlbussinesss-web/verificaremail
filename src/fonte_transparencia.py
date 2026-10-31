@@ -20,6 +20,7 @@ from typing import Callable, Optional
 
 import pandas as pd
 import requests
+import streamlit as st
 
 CKAN_BASE = "https://dados.pe.gov.br"
 PACKAGE_ID = "remuneracao-de-servidores"
