@@ -317,43 +317,10 @@ except Exception as e:
     st.error(f"Nao foi possivel ler o CSV: {e}")
     st.stop()
 
-st.subheader("1. Arquivo analisado")
-c1, c2, c3, c4 = st.columns(4)
-c1.metric("Registros no arquivo", f"{leitura.n_linhas:,}".replace(",", "."))
-c2.metric("Colunas", len(leitura.colunas))
-c3.metric("Codificacao", leitura.encoding)
-c4.metric("Delimitador", leitura.delimitador_legivel)
+coluna_nome = leitura.coluna_nome or "Nome Completo"
+coluna_cargo = leitura.coluna_cargo
+coluna_matricula = leitura.coluna_matricula
 
-colunas = leitura.colunas
-idx_padrao = colunas.index(leitura.coluna_nome) if leitura.coluna_nome in colunas else 0
-coluna_nome = st.selectbox(
-    "Coluna com o nome completo (detectada automaticamente)",
-    options=colunas,
-    index=idx_padrao,
-)
-if leitura.coluna_nome:
-    st.caption(f"Coluna detectada automaticamente: **{leitura.coluna_nome}**")
-else:
-    st.warning("Nao foi possivel detectar a coluna de nome com confianca. Selecione manualmente.")
-
-col_extra1, col_extra2 = st.columns(2)
-coluna_cargo = col_extra1.selectbox(
-    "Coluna de cargo (opcional)",
-    options=["(nenhuma)"] + colunas,
-    index=(colunas.index(leitura.coluna_cargo) + 1) if leitura.coluna_cargo in colunas else 0,
-)
-coluna_matricula = col_extra2.selectbox(
-    "Coluna de matricula (opcional)",
-    options=["(nenhuma)"] + colunas,
-    index=(colunas.index(leitura.coluna_matricula) + 1) if leitura.coluna_matricula in colunas else 0,
-)
-coluna_cargo = None if coluna_cargo == "(nenhuma)" else coluna_cargo
-coluna_matricula = None if coluna_matricula == "(nenhuma)" else coluna_matricula
-
-with st.expander("Previa do arquivo (primeiras linhas)"):
-    st.dataframe(leitura.df.head(20), width="stretch")
-
-st.subheader("2. Gerar e-mails")
 if st.button("GERAR EMAILS", type="primary", width="stretch"):
     st.session_state.pop("resultado", None)
     with st.spinner("Processando..."):
